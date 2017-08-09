@@ -1,63 +1,55 @@
 #! /usr/bin/env lua
 
--- local cli = require("pitools/cli")
-local build = require("pitocools/build")
-local os = require("os")
-
 function basename(str)
-	local name = string.gsub(str, "(.*/)(.*)", "%2")
-	return name
+  local name = string.gsub(str, "(.*/)(.*)", "%2")
+  return name
 end
+
+-- local cli = require("pitools/cli")
+local build = require("pitocools.build")
+local os = require("os")
+local as = require("pitocools.applescript")
 
 function usage()
   print([[usage:
-  build [path_to_template]
-  extract [gfx|gff|map|sfx|music] [cart] [destination]
-]])
+  [-c| change_to_directory] build [path_to_template]
+  [-c| change_to_directory] extract [gfx|gff|map|sfx|music] [cart] [destination]
+  ]])
   os.exit(1)
 end
 
+local chdir_folder = "."
+local arg_offset = 0
+if arg[1] == "-c" then
+  chdir_folder = arg[2]
+  print("Will use " .. chdir_folder .. " as destination folder")
+  arg_offset = 2
+  table.remove(arg,1)
+  table.remove(arg,1)
+end
 
-if #arg < 2 and #arg > 4 then
+if #arg < 2 or  #arg > 4 then
   usage()
 end
 
+
 if arg[1] == "build" then
-  if #arg ~= 2 then usage() end
   source = arg[2]
   dest = basename(source)
-  build.build(source, dest)
-  function oa_key(k)
-    return string.format(" key code %d \n", k)
-  end
-
-  function oa_command(cmd)
-    return string.format(" keystroke \"%s\"\nkeystroke return\ndelay .1 \n", cmd)
-  end
-
-  commands = { "load " .. dest }
-
-  function commands_to_oa(commands)
-    local o = ""
-    for k,t in pairs(commands) do
-      o = o .. oa_command(t)
-    end
-    return o
-  end
-
-  local preamble = "osascript -e 'tell application \"PICO-8\" to activate' -e 'tell application \"System Events\" \n delay .1\n"
-  local postamble = " key code 15 using control down \n end tell'"
-  local whole = preamble .. commands_to_oa(commands) .. postamble
-  os.execute(whole)
-else
-  if #arg ~= 3 and #arg ~=4 then usage() end
+  build.build(chdir_folder, source, dest)
+  as.load_and_run(dest)
+elseif arg[2] == "extract" then
   target = arg[2]
   source = arg[3]
   if #arg == 4 then
     dest = arg[4]
   else
+    -- implicit
     dest = "includes/" .. target .. "-" .. basename(source)
   end
+
+  dest = chdir_folder .. "/" .. dest
+
   print("Extracting " ..target .. " from " .. source .. " to " .. dest)
   section = "__" .. target .. "__"
   local file = io.open(source, 'r')
