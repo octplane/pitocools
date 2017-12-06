@@ -9,6 +9,7 @@ function include(root_folder, filename)
   if preamble_position then
     content = string.sub(content, preamble_position + #MARKER+1)
   end
+
   preamble = "-- content of " .. filename .. "\n"
 
   return(preamble .. content)
@@ -53,13 +54,11 @@ local function appender(builder, text, code)
 end
 
 
-local function interpret(builder, text)
+local function interpret(builder, text, tag)
   local func
-  local tag
 
-  tag = text:sub(1, 7)
-  if tag == "dofile(" then
-    local content = text:sub(#tag + 1, #text - 2)
+  if tag == "dofile" or tag == "_gfx" then
+    local content = text:sub(#tag + 2, #text - 2)
     content = "include(root_folder, " .. content .. ")"
 
     func = function(code)
@@ -71,6 +70,11 @@ local function interpret(builder, text)
     
   appender(builder, text)
 end
+
+markers = {
+  "dofile",
+  "_gfx"
+}
 
 function M.compile(tmpl, env)
   local builder = { "local _ret = {}\n" }
@@ -84,23 +88,31 @@ function M.compile(tmpl, env)
   end
 
   while pos < #tmpl do
-
-    b = tmpl:find("dofile(", pos, true)
-    if not b then
-      break
+    local c_pos = #tmpl
+    local marker = nil
+    for ix = 1,#markers do
+      local current_marker = markers[ix]
+      local cm_pos = tmpl:find(current_marker .. "(", pos, true)
+      if cm_pos and cm_pos < c_pos then
+        c_pos = cm_pos
+        marker = current_marker
+      end
     end
-
-    -- Add all text up until this block.
-    appender(builder, tmpl:sub(pos, b-1))
-    -- Find the end of the block.
-    pos = tmpl:find(")", b)
-    if not pos then
-      appender(builder, "End dofile (')') missing")
-      break
+    -- print("Found ".. marker .. " at #" .. c_pos)
+  
+    if c_pos ~= #tmpl then
+      -- Add all text up until this block.
+      appender(builder, tmpl:sub(pos, c_pos-1))
+      -- Find the end of the block.
+      pos = tmpl:find(")", c_pos)
+      -- print("...  end of " .. marker .. " at #" ..pos)
+      if not pos then
+        appender(builder, "End of " .. marker .. "(')') missing")
+        break
+      end
+      interpret(builder, tmpl:sub(c_pos, pos+1), marker)
+      pos = pos+1
     end
-    interpret(builder, tmpl:sub(b, pos+1))
-
-    pos = pos+1
   end
   -- Add any text after the last block. Or all of it if there
   -- are no blocks.
