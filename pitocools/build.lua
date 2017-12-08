@@ -107,8 +107,8 @@ function M.compile(tmpl, env)
         marker = current_marker
       end
     end
-    print("Found ".. marker .. " at #" .. c_pos)
     if c_pos ~= #tmpl then
+      print("Found ".. marker .. " at #" .. c_pos)
       -- Add all text up until this block.
       appender(builder, tmpl:sub(pos, c_pos-1))
       -- Find the end of the block.
@@ -120,6 +120,9 @@ function M.compile(tmpl, env)
       end
       interpret(builder, tmpl:sub(c_pos+1, pos), marker)
       pos = pos+1
+    end
+    if c_pos == #tmpl then
+      break
     end
   end
   -- Add any text after the last block. Or all of it if there
