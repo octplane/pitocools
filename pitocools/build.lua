@@ -1,23 +1,42 @@
 local os = require("os")
-local MARKER = "__lua__"
 
-function include(root_folder, filename)
+markers = {
+  "__lua",
+  "__gfx",
+  "__gff",
+  "__map",
+  "__sfx",
+  "__music"
+}
+
+
+function include(root_folder, filename, section)
   print("including " .. filename)
   local file = io.open(root_folder .. "/" .. filename, 'r')
   local content = file:read("*a")
-  preamble_position = string.find(content,MARKER,1,true)
+  local marker = section .. "__\n"
+  preamble_position = string.find(content, marker, 1,true)
   if preamble_position then
-    content = string.sub(content, preamble_position + #MARKER+1)
+    end_section = string.find(content, "__[^_]+__\n", preamble_position)
+    if end_section ~= nil then
+      content = string.sub(content, preamble_position + #marker+1)
+    else
+      print("No end for " .. filename)
+      content = string.sub(content, preamble_position + #marker+1, end_section)
+    end
   end
 
   preamble = "-- content of " .. filename .. "\n"
-
+  if section ~= "__lua" then
+    preamble = section .. "__\n" .. preamble
+  end
   return(preamble .. content)
 end
 
 local env = {
   pairs  = pairs,
   ipairs = ipairs,
+
   type   = type,
   table  = table,
   string = string,
@@ -55,27 +74,17 @@ end
 
 
 local function interpret(builder, text, tag)
-  local func
+  -- builder is the template builder
+  -- text is the content of the function call
+  -- tag is the function we are calling
+  local content = text:sub(#tag + 1, #text - 1)
+  content = "include(root_folder, " .. content .. ", \"" .. tag .. "\")"
 
-  if tag == "dofile" or tag == "_gfx" then
-    local content = text:sub(#tag + 2, #text - 2)
-    content = "include(root_folder, " .. content .. ")"
-
-    func = function(code)
-      return ('_ret[#_ret+1] = %s'):format(code)
-    end
-    appender(builder, nil, func(content))
-    return
+  local func = function(code)
+    return ('_ret[#_ret+1] = %s'):format(code)
   end
-    
-  appender(builder, text)
+  appender(builder, nil, func(content))
 end
-
-markers = {
-  "dofile",
-  "_gfx"
-}
-
 function M.compile(tmpl, env)
   local builder = { "local _ret = {}\n" }
   local pos     = 1
@@ -98,8 +107,7 @@ function M.compile(tmpl, env)
         marker = current_marker
       end
     end
-    -- print("Found ".. marker .. " at #" .. c_pos)
-  
+    print("Found ".. marker .. " at #" .. c_pos)
     if c_pos ~= #tmpl then
       -- Add all text up until this block.
       appender(builder, tmpl:sub(pos, c_pos-1))
@@ -110,7 +118,7 @@ function M.compile(tmpl, env)
         appender(builder, "End of " .. marker .. "(')') missing")
         break
       end
-      interpret(builder, tmpl:sub(c_pos, pos+1), marker)
+      interpret(builder, tmpl:sub(c_pos+1, pos), marker)
       pos = pos+1
     end
   end
